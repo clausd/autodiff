@@ -31,10 +31,6 @@ module Autodiff
       self
     end
 
-    def argument_vector
-      @parent.argument_position(self) # do I need this
-    end
-
     def value(*args)
       raise 'Not implemented'
     end
@@ -42,6 +38,8 @@ module Autodiff
     def gradient
       raise 'Not implemented'
     end
+
+    ## overloads for arithmetic
 
     def +(y)
       Plus.new(self, Term.construct(y))
@@ -69,18 +67,6 @@ module Autodiff
 
     def initialize(x)
       @x = x unless x.nil?
-   end
-
-    def value
-      @x
-    end
-
-  end
-
-  class Variable < Term
-
-    def set(x)
-      @x = x unless x.nil?
     end
 
     def value
@@ -88,7 +74,33 @@ module Autodiff
     end
 
     def gradient
-      1
+      0
+    end
+
+    def accumulate(xbar)
+    end
+
+  end
+
+  class Variable < Term
+
+    def set(x)
+      unless x.nil?
+        @gradient = 0
+        @x = x
+      end
+    end
+
+    def value
+      @x
+    end
+
+    def gradient
+      @gradient
+    end
+
+    def accumulate(xbar)
+      @gradient += xbar
     end
 
   end
@@ -107,6 +119,11 @@ module Autodiff
     def gradient
     end
 
+    def accumulate(xbar)
+      @x.accumulate(xbar)
+      @y.accumulate(xbar)
+    end
+
   end
 
   class Times < Term
@@ -122,7 +139,11 @@ module Autodiff
     end
 
     def gradient
+    end
 
+    def accumulate(xbar)
+      @x.accumulate(@y.value*xbar)
+      @y.accumulate(@x.value*xbar)
     end
 
   end
@@ -139,7 +160,11 @@ module Autodiff
     end
 
     def gradient
+    end
 
+    def accumulate(xbar)
+      @x.accumulate(@y.value*@x.value**(@y.value-1)*xbar)
+      @y.accumulate(Math.log(@x.value)*self.value*xbar)
     end
 
   end
