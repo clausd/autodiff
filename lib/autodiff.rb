@@ -73,6 +73,10 @@ module Autodiff
       @x
     end
 
+    def transposed_value
+      @x
+    end
+
     def gradient
       0
     end
@@ -95,6 +99,10 @@ module Autodiff
       @x
     end
 
+    def transposed_value
+      @x
+    end
+
     def gradient
       @gradient
     end
@@ -103,6 +111,88 @@ module Autodiff
       @gradient += xbar
     end
 
+  end
+
+  class Matrix < Term
+
+    def set(m)
+      unless m.nil?
+        @gradient = Matrix.zero(m.row_count, m.column_count)
+        @m = m
+      end
+    end
+
+    def value
+      @m
+    end
+
+    def transposed_value
+      @m.transpose
+    end
+
+    def accumulate(xbar)
+      if xbar.is_a?(::Matrix) # this is a bit speculative - need to write down a proof
+        @gradient = @gradient + xbar
+      end
+    end
+  end
+
+  class Trace < Term
+
+    def initialize(m)
+      unless m.nil?
+        @m = m
+      end
+    end
+
+    def value
+      @m[0,0]
+    end
+
+    def transposed_value
+      @m[0,0]
+    end
+
+    def gradient
+
+    end
+
+    def accumulate(xbar)
+      @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar})
+    end
+
+  end
+
+  class Transpose < Term
+
+    def initialize(m)
+      unless m.nil?
+        @m = m.transpose
+      end
+    end
+
+    def value
+      @m
+    end
+
+    def transposed_value
+      @m.transpose
+    end
+
+    def gradient
+
+    end
+
+    def accumulate(xbar)
+      @m.accumulate(xbar.transpose)
+    end
+
+  end
+
+  class Vector < Matrix
+    # just simplified construction, otherwise implemented in matrix...
+
+    # TODO
   end
 
   class Plus < Term
@@ -141,9 +231,10 @@ module Autodiff
     def gradient
     end
 
+    # this works for scalars as well as matrices
     def accumulate(xbar)
-      @x.accumulate(@y.value*xbar)
-      @y.accumulate(@x.value*xbar)
+      @x.accumulate(@y.transposed_value*xbar)
+      @y.accumulate(xbar*@x.transposed_value)
     end
 
   end
@@ -162,6 +253,7 @@ module Autodiff
     def gradient
     end
 
+    # this does not support matrix values
     def accumulate(xbar)
       @x.accumulate(@y.value*@x.value**(@y.value-1)*xbar)
       @y.accumulate(Math.log(@x.value)*self.value*xbar)
