@@ -117,7 +117,7 @@ module Autodiff
 
     def set(m)
       unless m.nil?
-        @gradient = Matrix.zero(m.row_count, m.column_count)
+        @gradient = ::Matrix.zero(m.row_count, m.column_count)
         @m = m
       end
     end
@@ -128,6 +128,10 @@ module Autodiff
 
     def transposed_value
       @m.transpose
+    end
+
+    def gradient
+      @gradient
     end
 
     def accumulate(xbar)
@@ -137,7 +141,58 @@ module Autodiff
     end
   end
 
-  class Trace < Term
+  class Vector < Matrix
+    # just simplified construction, otherwise implemented in matrix...
+
+    # TODO
+  end
+
+  # collapse a dimension by summing
+  class Reduce < Term
+
+    def initialize(m,dimension)
+      unless m.nil?
+        @m = m
+        @reduce_by = dimension
+      end
+    end
+
+    def reduce_by_rows
+      ::Matrix.build(1, @m.column_count) { |i,j| @m.column(j).inject(&:+)}
+    end
+
+    def reduce_by_columns
+      ::Matrix.build(1, @m.column_count) { |i,j| @m.column(j).inject(&:+)}
+    end
+
+    def value
+      case @reduce_by
+        when :rows
+          reduce_by_rows
+        when :columns
+          reduce_by_columns
+      end
+    end
+
+    def transposed_value
+      value.transpose
+    end
+
+    def gradient
+
+    end
+
+    def accumulate(xbar) # watch the value
+      case @reduce_by
+        when :rows
+          @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar[0,j]})
+        when :columns
+          @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar[i,0]})
+      end
+    end
+  end
+
+  class Transpose < Term
 
     def initialize(m)
       unless m.nil?
@@ -146,37 +201,11 @@ module Autodiff
     end
 
     def value
-      @m[0,0]
+      @m.transposed_value
     end
 
     def transposed_value
-      @m[0,0]
-    end
-
-    def gradient
-
-    end
-
-    def accumulate(xbar)
-      @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar})
-    end
-
-  end
-
-  class Transpose < Term
-
-    def initialize(m)
-      unless m.nil?
-        @m = m.transpose
-      end
-    end
-
-    def value
-      @m
-    end
-
-    def transposed_value
-      @m.transpose
+      @m.value
     end
 
     def gradient
@@ -189,10 +218,38 @@ module Autodiff
 
   end
 
-  class Vector < Matrix
-    # just simplified construction, otherwise implemented in matrix...
+  # compute a term for each element in  a matrix
+  # possibly better to have a set list of scalar functions that we generate classes for
+  # I think that's WAY more viable...
+  class Apply < Term
 
-    # TODO
+    def initialize(matrix, term)
+      @m = matrix
+    end
+
+    def value
+      @m.collect {|v| term.new(v).value} #<-- this is ridcls expensive
+    end
+
+    def transposed_value
+      value.transpose
+    end
+
+    #this is hideous - think hard about how to do this kind of thing....
+    def accumulate(xbar)
+      @m.accumulate(::Matrix.build {|i,j| t = term.new(@m[i,j]).accumulate(xbar[i,j]); t.gradient})
+    end
+
+  end
+
+  # turn n by m things into k by l things when n*m == k*l
+  class Reshape < Term
+
+  end
+
+  # sum elements
+  class Reduce < Term
+
   end
 
   class Plus < Term
