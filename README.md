@@ -18,7 +18,23 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+
+Factory ideas
+
+AD.x <- new variable
+AD.M <- new matrix
+AD.v <- new vector
+AD.c <- constant
+AD.C <- matrix valued constant
+
+rest done via overloading
+
+t is a term
+t.arguments - lists all variables for a term
+t.set - set arguments directly
+t.gradient - t.arguments.map(&:gradient)
+
+AD.apply(M, term)
 
 ## Contributing
 

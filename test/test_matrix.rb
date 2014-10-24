@@ -23,8 +23,22 @@ class MatrixTest < Test::Unit::TestCase
     assert_equal v1.gradient, 2*::Matrix[[1,2,3,4,5]]
   end
 
+  def test_apply
+    power = ::Autodiff::Variable.new**2
+    m = ::Autodiff::Matrix.new
+    mpower = ::Autodiff::Apply.new(m,power)
+    m.set(Matrix[[1,2],[3,4]])
+    assert_equal mpower.value, Matrix[[1,4],[9,16]]
+    mpower.accumulate(Matrix[[1,1],[1,1]])
+    assert_equal m.gradient, Matrix[[2,4],[6,8]]
+  end
+
+  def test_reduce
+
+  end
+
   def test_norm
-    
+
   end
 
 end

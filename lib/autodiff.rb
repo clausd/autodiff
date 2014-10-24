@@ -39,6 +39,11 @@ module Autodiff
       raise 'Not implemented'
     end
 
+
+    def arguments
+      raise "Not implemented"
+    end
+
     ## overloads for arithmetic
 
     def +(y)
@@ -84,6 +89,10 @@ module Autodiff
     def accumulate(xbar)
     end
 
+    def arguments
+      []
+    end
+
   end
 
   class Variable < Term
@@ -109,6 +118,10 @@ module Autodiff
 
     def accumulate(xbar)
       @gradient += xbar
+    end
+
+    def arguments
+      [self]
     end
 
   end
@@ -139,6 +152,11 @@ module Autodiff
         @gradient = @gradient + xbar
       end
     end
+
+    def arguments
+      [self]
+    end
+
   end
 
   class Vector < Matrix
@@ -162,7 +180,7 @@ module Autodiff
     end
 
     def reduce_by_columns
-      ::Matrix.build(1, @m.column_count) { |i,j| @m.column(j).inject(&:+)}
+      ::Matrix.build(@m.row_count, 1) { |i,j| @m.column(j).inject(&:+)}
     end
 
     def value
@@ -190,6 +208,11 @@ module Autodiff
           @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar[i,0]})
       end
     end
+
+    def arguments
+      [@m]
+    end
+
   end
 
   class Transpose < Term
@@ -216,6 +239,10 @@ module Autodiff
       @m.accumulate(xbar.transpose)
     end
 
+    def arguments
+      [@m]
+    end
+
   end
 
   # compute a term for each element in  a matrix
@@ -225,30 +252,31 @@ module Autodiff
 
     def initialize(matrix, term)
       @m = matrix
+      @term = term
     end
 
+    # TODO - store a recompute-signal
     def value
-      @m.collect {|v| term.new(v).value} #<-- this is ridcls expensive
+      @m.value.collect {|v| @term.arguments.first.set(v); @term.value}
     end
 
     def transposed_value
       value.transpose
     end
 
-    #this is hideous - think hard about how to do this kind of thing....
+    # accumulation is linear, so we can simple trust the accumulation logic from @term
     def accumulate(xbar)
-      @m.accumulate(::Matrix.build {|i,j| t = term.new(@m[i,j]).accumulate(xbar[i,j]); t.gradient})
+      @m.accumulate(::Matrix.build(@m.value.row_count, @m.value.column_count) {|i,j| @term.arguments.first.set(@m.value[i,j]); @term.accumulate(xbar[i,j]); @term.arguments.first.gradient})
+    end
+
+    def arguments
+      [@m]
     end
 
   end
 
   # turn n by m things into k by l things when n*m == k*l
   class Reshape < Term
-
-  end
-
-  # sum elements
-  class Reduce < Term
 
   end
 
@@ -269,6 +297,10 @@ module Autodiff
     def accumulate(xbar)
       @x.accumulate(xbar)
       @y.accumulate(xbar)
+    end
+
+    def arguments
+      (@x.arguments + @y.arguments).uniq
     end
 
   end
@@ -294,6 +326,10 @@ module Autodiff
       @y.accumulate(xbar*@x.transposed_value)
     end
 
+    def arguments
+      (@x.arguments + @y.arguments).uniq
+    end
+
   end
 
   class Power < Term
@@ -314,6 +350,10 @@ module Autodiff
     def accumulate(xbar)
       @x.accumulate(@y.value*@x.value**(@y.value-1)*xbar)
       @y.accumulate(Math.log(@x.value)*self.value*xbar)
+    end
+
+    def arguments
+      (@x.arguments + @y.arguments).uniq
     end
 
   end
