@@ -33,4 +33,23 @@ class BasicTest < Test::Unit::TestCase
     assert y.gradient == ddy.value
 
   end
+
+  def test_sigmoid_function
+    x = ::Autodiff::Variable.new()
+    sigmoid = (::Autodiff::Constant.new(Math::E)**(x*-1.0) + 1)**-1.0
+    sigmoid_derivative = sigmoid*(sigmoid-1)*-1
+    x.set(0.0)
+    assert_in_delta(0.5,sigmoid.value, 0.00001)
+    sigmoid.accumulate(1)
+    assert_in_delta(sigmoid_derivative.value,x.gradient, 0.00001)
+    x.set(-Math.log(3))
+    assert_in_delta(0.25,sigmoid.value, 0.00001)
+    sigmoid.accumulate(1)
+    assert_in_delta(sigmoid_derivative.value,x.gradient, 0.00001)
+    x.set(Math.log(3))
+    assert_in_delta(0.75,sigmoid.value, 0.00001)
+    sigmoid.accumulate(1)
+    assert_in_delta(sigmoid_derivative.value,x.gradient, 0.00001)
+  end
+
 end

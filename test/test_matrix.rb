@@ -31,14 +31,27 @@ class MatrixTest < Test::Unit::TestCase
     assert_equal mpower.value, Matrix[[1,4],[9,16]]
     mpower.accumulate(Matrix[[1,1],[1,1]])
     assert_equal m.gradient, Matrix[[2,4],[6,8]]
+    # binding.pry
   end
 
   def test_reduce
-
+    m = ::Autodiff::Matrix.new
+    onedim = ::Autodiff::Reduce.new(m, :rows)
+    m.set(Matrix[[1,2],[3,4]])
+    assert_equal Matrix[[4,6]], onedim.value
+    zerodim = ::Autodiff::Reduce.new(onedim, :columns)
+    assert_equal Matrix[[10]], zerodim.value
+    # TODO gradient
   end
 
   def test_norm
-
+    m = ::Autodiff::Matrix.new
+    power = ::Autodiff::Variable.new**2.0
+    norm_squared = ::Autodiff::Reduce.new(::Autodiff::Reduce.new(::Autodiff::Apply.new(m,power), :rows),:columns)
+    m.set(Matrix[[1,1],[1,1]])
+    p norm_squared.value
+    norm_squared.accumulate(Matrix[[1]])
+    p m.gradient
   end
 
 end
