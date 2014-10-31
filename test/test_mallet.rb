@@ -39,11 +39,34 @@ class MalletTest < Test::Unit::TestCase
     solver = ::Autodiff::Mallet::Simple.new(f)
     x.set(0)
     y.set(0)
-    puts f.value
-    puts solver.solve
-    puts f.value
-    puts x.value
-    puts y.value
+
+    assert solver.solve
+    # puts f.value
+    # puts x.value
+    # puts y.value
 
   end
+
+  def test_matrix_solver
+    m = ::Autodiff::Matrix.new
+    c = ::Autodiff::ConstantMatrix.new([[3,4],[5,6]])
+    power = ::Autodiff::Variable.new**2.0
+    norm_squared = ::Autodiff::Pick.new(
+      ::Autodiff::Reduce.new(
+        ::Autodiff::Reduce.new(
+          ::Autodiff::Apply.new(m-c,power),
+          :rows),
+        :columns),0,0)*(-1)
+
+    solver = ::Autodiff::Mallet::Simple.new(norm_squared)
+    m.set([[0.0,0.0],[0.0,0.0]])
+    norm_squared.accumulate(1)
+
+    p norm_squared.gradient_array
+
+    solver.solve
+    puts m.value
+    puts norm_squared.value
+  end
+
 end

@@ -66,6 +66,14 @@ module Autodiff
       raise "Not implemented"
     end
 
+    def value_array
+      arguments.map(&:value_array).flatten
+    end
+
+    def gradient_array
+      arguments.map(&:value_array).flatten
+    end
+
     ## overloads for arithmetic
 
     def +(y)
@@ -169,18 +177,23 @@ module Autodiff
 
     def set(m)
       unless m.nil?
-        @gradient = ::Matrix.zero(m.row_count, m.column_count)
-        if m.is_a?(Array)
-          if m.first.is_a?(Array)
-            @m = ::Matrix.rows(a)
-          else
-            @m = ::Matrix.rows(a.each_slice(@m.row_count))
-          end
-        elsif m.is_a?(::Matrix)
-          @m = m
+        if m.respond_to?(:to_a)
+          mm = m.to_a
         else
-          raise "not implemented"
+          mm = m
         end
+        if mm.is_a?(Array)
+          if mm.first.is_a?(Array)
+            @m = ::Matrix.rows(mm)
+          else
+            @m = ::Matrix.rows(mm.each_slice(@m.row_count).to_a)
+          end
+        elsif mmm.is_a?(::Matrix)
+          @m = mm
+        else
+          raise "not implemented " + m.class
+        end
+        @gradient = ::Matrix.zero(@m.row_count, @m.column_count)
       end
     end
 
@@ -207,19 +220,40 @@ module Autodiff
     end
 
     def value_array
-      self.value.to_a
+      self.value.to_a.flatten
     end
 
     def gradient_array
-      self.gradient.to_a
+      self.gradient.to_a.flatten
     end
 
   end
 
-  class Vector < Matrix
-    # just simplified construction, otherwise implemented in matrix...
+  class ConstantMatrix < Matrix
 
-    # TODO
+    def initialize(m)
+      unless m.nil?
+        if m.is_a?(Array)
+          if m.first.is_a?(Array)
+            @m = ::Matrix.rows(m)
+          else
+            @m = ::Matrix.rows(m.each_slice(@m.row_count))
+          end
+        elsif m.is_a?(::Matrix)
+          @m = m
+        else
+          raise "not implemented"
+        end
+      end
+    end
+
+    def accumulate(xbar)
+    end
+
+    def arguments
+      []
+    end
+
   end
 
   # collapse a dimension by summing
@@ -267,7 +301,7 @@ module Autodiff
     end
 
     def arguments
-      [@m]
+      @m.arguments
     end
 
   end
@@ -297,7 +331,7 @@ module Autodiff
     end
 
     def arguments
-      [@m]
+      @m.arguments
     end
 
   end
@@ -327,14 +361,36 @@ module Autodiff
     end
 
     def arguments
-      [@m]
+      @m.arguments
     end
 
   end
 
-  # turn n by m things into k by l things when n*m == k*l
-  class Reshape < Term
+  # get a scalar from a matrix
+  class Pick < Term
+    def initialize(matrix, i, j)
+      @m = matrix
+      @i = i
+      @j = j
+    end
 
+    # TODO - store a recompute-signal
+    def value
+      @m.value[@i,@j]
+    end
+
+    def transposed_value
+      value
+    end
+
+    # accumulation is linear, so we can simple trust the accumulation logic from @term
+    def accumulate(xbar)
+      @m.accumulate(::Matrix.build(@m.value.row_count, @m.value.column_count) {|i,j| (i == @i && j == @j ? xbar : 0.0) })
+    end
+
+    def arguments
+      @m.arguments
+    end
   end
 
   class Plus < Term
@@ -425,7 +481,7 @@ module Autodiff
     # this does not support matrix values
     def accumulate(xbar)
       @x.accumulate(@y.value*@x.value**(@y.value-1)*xbar)
-      @y.accumulate(Math.log(@x.value)*self.value*xbar)
+      @y.accumulate(Math.log(@x.value)*self.value*xbar) if @x.value>0
     end
 
     def arguments
