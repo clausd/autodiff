@@ -49,9 +49,9 @@ class MatrixTest < Test::Unit::TestCase
     power = ::Autodiff::Variable.new**2.0
     norm_squared = ::Autodiff::Reduce.new(::Autodiff::Reduce.new(::Autodiff::Apply.new(m,power), :rows),:columns)
     m.set(Matrix[[1,1],[1,1]])
-    p norm_squared.value
+    # p norm_squared.value
     norm_squared.accumulate(Matrix[[1]])
-    p m.gradient
+    # p m.gradient
   end
 
 end

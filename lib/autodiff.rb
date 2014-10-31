@@ -1,5 +1,7 @@
 require "autodiff/version"
 
+# this is silly just live with the stupidity of size
+# going to make a matrix-adapter though, so I can switch out classes dep on platform (MRI vs JRuby)
 class Matrix
   unless Matrix.respond_to?(:row_count)
     def row_count
@@ -10,6 +12,11 @@ class Matrix
       column_size
     end
   end
+
+  def []=(i, j, x)
+    @rows[i][j] = x
+  end
+
 end
 
 module Autodiff
@@ -117,8 +124,16 @@ module Autodiff
     def set(x)
       unless x.nil?
         @gradient = 0
-        @x = x
+        @x = [x].flatten.first
       end
+    end
+
+    def setParams(i, array)
+      set(array[i])
+    end
+
+    def setParams(array)
+      set(array[0])
     end
 
     def value
@@ -141,6 +156,13 @@ module Autodiff
       [self]
     end
 
+    def value_array
+      [self.value]
+    end
+
+    def gradient_array
+      [self.gradient]
+    end
   end
 
   class Matrix < Term
@@ -148,7 +170,17 @@ module Autodiff
     def set(m)
       unless m.nil?
         @gradient = ::Matrix.zero(m.row_count, m.column_count)
-        @m = m
+        if m.is_a?(Array)
+          if m.first.is_a?(Array)
+            @m = ::Matrix.rows(a)
+          else
+            @m = ::Matrix.rows(a.each_slice(@m.row_count))
+          end
+        elsif m.is_a?(::Matrix)
+          @m = m
+        else
+          raise "not implemented"
+        end
       end
     end
 
@@ -172,6 +204,14 @@ module Autodiff
 
     def arguments
       [self]
+    end
+
+    def value_array
+      self.value.to_a
+    end
+
+    def gradient_array
+      self.gradient.to_a
     end
 
   end

@@ -19,33 +19,58 @@ module Autodiff
 
       def getValueGradient(gradient)
         expression.accumulate(1)
-        @expression.arguments.each_with_index {|v,i| gradient[i] = v.gradient}
+        j = 0
+        @expression.arguments.each do |v|
+          a = v.gradient_array
+          # jruby can't assign to range
+          (j..(j+a.size-1)).each_with_index {|k,i| gradient[k] = a[i]}
+          j += a.size
+        end
       end
 
       # The following get/set methods satisfy the Optimizable interface
 
       def getNumParameters
-        @expression.arguments.count
+        @expression.arguments.map {|a| a.value_array.size }.inject(&:+)
       end
 
       def getParameter(i)
-        @expression.arguments[i].value
+        # EXPENSIVE
+        # TODO fix this
+        a = []
+        getParameters(a)
+        a[i]
       end
 
       def getParameters(buffer)
-        @expression.arguments.each_with_index {|v,i| buffer[i] = v.value}
+        j = 0
+        @expression.arguments.each do |v|
+          a = v.value_array
+          # jruby can't assign to range
+          (j..(j+a.size-1)).each_with_index {|k,i| buffer[k] = a[i]}
+          j += a.size
+        end
       end
 
       def setParameter(i, r)
-        @expression.arguments[i].set(r)
+        # EXPENSIVE
+        # TODO fix this
+        a = []
+        getParameters(a)
+        a[i] = r
+        setParameters(a)
       end
 
       def setParameters(newParameters)
-        @expression.arguments.each_with_index {|v,i| v.set(newParameters[i])}
+        j = 0
+        @expression.arguments.each do |v|
+          a = v.value_array
+          v.set(newParameters[j..(j+a.size-1)])
+          j += a.size
+        end
       end
 
-      def solve(initial)
-        self.setParameters(initial)
+      def solve
         construct = Java::cc::mallet::optimize::LimitedMemoryBFGS.java_class.constructor(Java::cc::mallet::optimize::Optimizable::ByGradientValue)
         optimizer = construct.new_instance(self)
         optimize_method = optimizer.java_class.declared_method(:optimize)
