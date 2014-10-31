@@ -1,5 +1,17 @@
 require "autodiff/version"
 
+class Matrix
+  unless Matrix.respond_to?(:row_count)
+    def row_count
+      row_size
+    end
+
+    def column_count
+      column_size
+    end
+  end
+end
+
 module Autodiff
 
   class Term
@@ -39,6 +51,9 @@ module Autodiff
       raise 'Not implemented'
     end
 
+    def flush
+
+    end
 
     def arguments
       raise "Not implemented"
@@ -50,18 +65,20 @@ module Autodiff
       Plus.new(self, Term.construct(y))
     end
 
-    # def -(y)
-    #   Minus.new(self, v)
-    # end
+    # TODO Minus-operator for less overhead
+    def -(y)
+      Plus.new(self, Times.new(Term.construct(y),Term.construct(-1)))
+    end
 
     def *(y)
       Times.new(self,Term.construct(y))
     end
 
-    # def /(y)
-    #   DividedBy.new(self,v)
-    # end
-    #
+    # TODO Divided-operator for less overhead
+    def /(y)
+      Times.new(self,Power.new(Term.construct(v),Term.construct(-1)))
+    end
+
     def **(y)
       Power.new(self,Term.construct(y))
     end
@@ -175,20 +192,20 @@ module Autodiff
       end
     end
 
-    def reduce_by_rows
-      ::Matrix.build(1, @m.column_count) { |i,j| @m.column(j).inject(&:+)}
+    def reduce_rows
+      ::Matrix.build(1, @m.value.column_count) { |i,j| @m.value.column(j).inject(&:+)}
     end
 
-    def reduce_by_columns
-      ::Matrix.build(@m.row_count, 1) { |i,j| @m.column(j).inject(&:+)}
+    def reduce_columns
+      ::Matrix.build(@m.value.row_count, 1) { |i,j| @m.value.row(i).inject(&:+)}
     end
 
     def value
       case @reduce_by
         when :rows
-          reduce_by_rows
+          reduce_rows
         when :columns
-          reduce_by_columns
+          reduce_columns
       end
     end
 
@@ -203,9 +220,9 @@ module Autodiff
     def accumulate(xbar) # watch the value
       case @reduce_by
         when :rows
-          @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar[0,j]})
+          @m.accumulate(::Matrix.build(@m.value.row_count, @m.value.column_count) { |i,j| xbar[0,j]})
         when :columns
-          @m.accumulate(::Matrix.build(@m.row_count, @m.column_count) { |i,j| xbar[i,0]})
+          @m.accumulate(::Matrix.build(@m.value.row_count, @m.value.column_count) { |i,j| xbar[i,0]})
       end
     end
 
@@ -283,15 +300,21 @@ module Autodiff
   class Plus < Term
 
     def initialize(x,y)
-      @x = x.attach(self)
-      @y = y.attach(self)
+      @x = x #x.attach(self)
+      @y = y #y.attach(self)
     end
 
     def value(*args)
       @x.value + @y.value
     end
 
-    def gradient
+    # TODO - too costly
+    def transposed_value
+      if value.respond_to?(:transpose)
+        value.transpose
+      else
+        value
+      end
     end
 
     def accumulate(xbar)
@@ -308,13 +331,22 @@ module Autodiff
   class Times < Term
 
     def initialize(x,y)
-      @x = x.attach(self)
-      @y = y.attach(self)
+      @x = x #x.attach(self)
+      @y = y #y.attach(self)
 
     end
 
     def value(*args)
       @x.value * @y.value
+    end
+
+    # TODO - too costly
+    def transposed_value
+      if value.respond_to?(:transpose)
+        value.transpose
+      else
+        value
+      end
     end
 
     def gradient
@@ -335,11 +367,15 @@ module Autodiff
   class Power < Term
 
     def initialize(x,y)
-      @x = x.attach(self)
-      @y = y.attach(self)
+      @x = x #x.attach(self)
+      @y = y #y.attach(self)
     end
 
     def value(*args)
+      @x.value**@y.value
+    end
+
+    def transposed_value(*args)
       @x.value**@y.value
     end
 
