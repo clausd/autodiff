@@ -21,10 +21,32 @@ end
 
 module Autodiff
 
+  # TODO - put in own file and expand
+  class Builder
+
+    def self.x
+      Variable.new
+    end
+
+    def self.k(a)
+      Constant.new(a)
+    end
+
+    def self.M(n,m)
+      Matrix.new(n,m)
+    end
+
+    def self.K(m)
+      ConstantMatrix.new(m)
+    end
+
+  end
+
   class Term
 
-    @parent = nil
+    attr_accessor :scalars, :partials, :parent, :position
 
+    # TODO eliminate - Builder is better
     def self.construct(x)
       k = x.class
       case
@@ -45,35 +67,6 @@ module Autodiff
       end
     end
 
-    def attach(parent)
-      @parent = parent
-      self
-    end
-
-    def value(*args)
-      raise 'Not implemented'
-    end
-
-    def gradient
-      raise 'Not implemented'
-    end
-
-    def flush
-
-    end
-
-    def arguments
-      raise "Not implemented"
-    end
-
-    def value_array
-      arguments.map(&:value_array).flatten
-    end
-
-    def gradient_array
-      arguments.map(&:value_array).flatten
-    end
-
     ## overloads for arithmetic
 
     def +(y)
@@ -91,11 +84,37 @@ module Autodiff
 
     # TODO Divided-operator for less overhead
     def /(y)
-      Times.new(self,Power.new(Term.construct(v),Term.construct(-1)))
+      Times.new(self,Power.new(Term.construct(y),Term.construct(-1)))
     end
 
     def **(y)
       Power.new(self,Term.construct(y))
+    end
+
+    def size
+      @size
+    end
+
+    def gradient
+      partials
+    end
+
+    def flush
+      @partials = (0..@partials.size).map {0}
+    end
+
+    def arrange
+      @scalars = [] # TODO store here in future
+      @partials = [] # TODO store here in future
+
+      @size = 0
+      arguments.each do |arg|
+        first = @size
+        last = @size+arg.size-1
+        arg.parent = self
+        arg.position = (first..last)
+        @size = last+1
+      end
     end
 
   end
@@ -129,71 +148,60 @@ module Autodiff
 
   class Variable < Term
 
+    def initialize
+      @parent = self
+      @position = 0..0
+      @scalars = [0]
+      @partials = [0]
+      @size = 1
+    end
+
     def set(x)
       unless x.nil?
-        @gradient = 0
-        @x = [x].flatten.first
+        parent.scalars[position] = [x].flatten
+        parent.partials[position.first] = 0
       end
     end
 
-    def setParams(i, array)
-      set(array[i])
-    end
-
-    def setParams(array)
-      set(array[0])
-    end
-
     def value
-      @x
+      parent.scalars[position.first]
     end
 
     def transposed_value
-      @x
+      parent.scalars[position.first]
     end
 
     def gradient
-      @gradient
+      parent.partials[position.first]
     end
 
     def accumulate(xbar)
-      @gradient += xbar
+      parent.partials[position.first] += xbar
     end
 
     def arguments
       [self]
     end
 
-    def value_array
-      [self.value]
-    end
-
-    def gradient_array
-      [self.gradient]
-    end
   end
 
   class Matrix < Term
 
+    def initialize(k,l)
+      @nrows = k
+      @ncols = l
+      @parent = self
+      @scalars = []
+      @partials = []
+      @position = 0..(k*l-1)
+      @size = k*l
+    end
+
     def set(m)
       unless m.nil?
-        if m.respond_to?(:to_a)
-          mm = m.to_a
-        else
-          mm = m
-        end
-        if mm.is_a?(Array)
-          if mm.first.is_a?(Array)
-            @m = ::Matrix.rows(mm)
-          else
-            @m = ::Matrix.rows(mm.each_slice(@m.row_count).to_a)
-          end
-        elsif mmm.is_a?(::Matrix)
-          @m = mm
-        else
-          raise "not implemented " + m.class
-        end
-        @gradient = ::Matrix.zero(@m.row_count, @m.column_count)
+        parent.scalars[position] = [m.to_a].flatten
+        @m = ::Matrix.rows([m.to_a].flatten.each_slice(@ncols).to_a)
+        parent.partials[position] = position.to_a.map {0}
       end
     end
 
@@ -206,25 +214,18 @@ module Autodiff
     end
 
     def gradient
-      @gradient
+      parent.partials[position]
     end
 
     def accumulate(xbar)
-      if xbar.is_a?(::Matrix) # this is a bit speculative - need to write down a proof
-        @gradient = @gradient + xbar
+      d = position.first
+      xbar.to_a.flatten.each_with_index do |v,i|
+        parent.partials[i+d] += v
       end
     end
 
     def arguments
       [self]
-    end
-
-    def value_array
-      self.value.to_a.flatten
-    end
-
-    def gradient_array
-      self.gradient.to_a.flatten
     end
 
   end
@@ -429,7 +430,6 @@ module Autodiff
     def initialize(x,y)
       @x = x #x.attach(self)
       @y = y #y.attach(self)
-
     end
 
     def value(*args)
@@ -491,3 +491,7 @@ module Autodiff
   end
 
 end
+
+# simplify construction
+# AD.k(3)*AD.x**2
+AD = Autodiff::Builder
