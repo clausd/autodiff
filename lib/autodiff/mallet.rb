@@ -19,54 +19,35 @@ module Autodiff
 
       def getValueGradient(gradient)
         expression.accumulate(1)
-        j = 0
-        @expression.arguments.each do |v|
-          a = v.gradient_array
-          # jruby can't assign to range
-          (j..(j+a.size-1)).each_with_index {|k,i| gradient[k] = a[i]}
-          j += a.size
-        end
+        expression.partials.each_with_index {|v,i| gradient[i] = v}
       end
 
       # The following get/set methods satisfy the Optimizable interface
 
       def getNumParameters
-        @expression.arguments.map {|a| a.value_array.size }.inject(&:+)
+        @expression.size
       end
 
       def getParameter(i)
-        # EXPENSIVE
-        # TODO fix this
-        a = []
-        getParameters(a)
-        a[i]
+        expression.scalars[i]
       end
 
       def getParameters(buffer)
-        j = 0
-        @expression.arguments.each do |v|
-          a = v.value_array
-          # jruby can't assign to range
-          (j..(j+a.size-1)).each_with_index {|k,i| buffer[k] = a[i]}
-          j += a.size
-        end
+        expression.scalars.each_with_index {|v,i| buffer[i] = v}
       end
 
       def setParameter(i, r)
-        # EXPENSIVE
-        # TODO fix this
-        a = []
-        getParameters(a)
-        a[i] = r
-        setParameters(a)
+        expression.arguments.each do |arg|
+          if arg.position.first <= i && i <= arg.position.last
+            expression.scalars[i] = r
+            arg.set(expression.scalars[arg.position])
+          end
+        end
       end
 
       def setParameters(newParameters)
-        j = 0
-        @expression.arguments.each do |v|
-          a = v.value_array
-          v.set(newParameters[j..(j+a.size-1)])
-          j += a.size
+        expression.arguments.each do |arg|
+          arg.set(newParameters[arg.position])
         end
       end
 

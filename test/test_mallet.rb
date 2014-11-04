@@ -7,12 +7,13 @@ class MalletTest < Test::Unit::TestCase
 
   def test_interface
 
-    x = ::Autodiff::Variable.new()
-    y = ::Autodiff::Variable.new()
+    x = AD.x
+    y = AD.x
 
-    f = x*x*(-3) - y*y*4 + x*2 - y*4 + 18
+    f = AD.k(-3)*x*x + AD.k(-4)*y*y + x*2 - y*4 + 18
+    f.arrange
+    solver = Autodiff::Mallet::Simple.new(f)
 
-    solver = ::Autodiff::Mallet::Simple.new(f)
     x.set(3.0)
     y.set(2.0)
 
@@ -31,12 +32,12 @@ class MalletTest < Test::Unit::TestCase
   end
 
   def test_solver
-    x = ::Autodiff::Variable.new()
-    y = ::Autodiff::Variable.new()
+    x = AD.x
+    y = AD.x
 
-    f = x*x*(-3) - y*y*4 + x*2 - y*4 + 18
-
-    solver = ::Autodiff::Mallet::Simple.new(f)
+    f = AD.k(-3)*x*x + AD.k(-4)*y*y + x*2 - y*4 + 18
+    f.arrange
+    solver = Autodiff::Mallet::Simple.new(f)
     x.set(0)
     y.set(0)
 
@@ -48,23 +49,37 @@ class MalletTest < Test::Unit::TestCase
   end
 
   def test_matrix_solver
-    m = ::Autodiff::Matrix.new
-    c = ::Autodiff::ConstantMatrix.new([[3,4],[5,6]])
-    power = ::Autodiff::Variable.new**2.0
-    norm_squared = ::Autodiff::Pick.new(
-      ::Autodiff::Reduce.new(
-        ::Autodiff::Reduce.new(
-          ::Autodiff::Apply.new(m-c,power),
+    dim = 10
+    m = AD.M(dim,dim)
+    c = AD.K((1..(dim*dim)).map {|i| i}.each_slice(dim).to_a)
+    random_matrix = AD.K((1..(dim*dim)).map {|i| rand+i/(dim*dim)}.each_slice(dim).to_a)
+    power = AD.x**2.0
+    sigmoid = AD.k(1)/(AD.k(Math::E)**(AD.k(-1)*AD.x) + 1)
+
+    norm_squared = Autodiff::Pick.new(
+      Autodiff::Reduce.new(
+        Autodiff::Reduce.new(
+          Autodiff::Apply.new(Autodiff::Apply.new(m*c,sigmoid)-random_matrix,power),
           :rows),
         :columns),0,0)*(-1)
 
-    solver = ::Autodiff::Mallet::Simple.new(norm_squared)
-    m.set([[0.0,0.0],[0.0,0.0]])
+
+    norm_squared.arrange
+    solver = Autodiff::Mallet::Simple.new(norm_squared)
+    m.set((1..dim*dim).map {0.0})
     norm_squared.accumulate(1)
 
-    p norm_squared.gradient_array
+    # p norm_squared.partials
 
-    solver.solve
+    t = Time.now
+    # e = norm_squared.evals
+    begin
+      solver.solve
+    rescue Exception => e
+      p e
+    end
+    puts "TIME " + (Time.now.to_f-t.to_f).to_s
+    # puts norm_squared.evals-e
     puts m.value
     puts norm_squared.value
   end
